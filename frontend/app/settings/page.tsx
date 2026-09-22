@@ -1,0 +1,4 @@
+"use client";
+import Protected from "@/components/Protected";
+import { useAuth } from "@/components/AuthProvider";
+export default function Settings(){const {me}=useAuth();return <Protected><div className="hero"><div><h1><span className="gradient-text">Workspace settings</span></h1><p>Your secure identity and tenant scope.</p></div></div><div className="grid grid-2"><div className="card"><div className="metric-label">Signed in as</div><div className="metric-value" style={{fontSize:20}}>{me?.email}</div><div className="metric-foot">Role: {me?.role}</div></div><div className="card"><div className="metric-label">Tenant scope</div><div className="metric-value" style={{fontSize:20}}>{me?.client_id}</div><div className="metric-foot">Enforced by Firebase claims and Cloud Run</div></div></div></Protected>}
