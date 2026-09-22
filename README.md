@@ -1,12 +1,114 @@
 # Zero Downtime
 
-AI-powered manufacturing operations intelligence platform for predictive maintenance, quality monitoring, supply chain risk, and production optimization — built for AI Builder Cup 2026.
+AI-powered industrial operations intelligence platform for the AI Builder Cup 2026 Manufacturing challenge.
 
-## Build approach
+## Architecture
 
-App first, cloud integration second.
+- **Frontend:** Next.js, Firebase Authentication, Framer Motion, Recharts
+- **Backend:** Node.js / Express on Cloud Run
+- **Auth & tenancy:** Firebase Authentication + custom claims + Firestore
+- **Analytics:** BigQuery
+- **AI:** Gemini / BigQuery Conversational Analytics
+- **Dataset:** AI4I 2020 Predictive Maintenance dataset, enriched into four fictional manufacturing tenants
 
-1. Build and validate the product experience with mock manufacturing data.
-2. Deploy the Next.js app to Google Cloud Run.
-3. Connect operational data through BigQuery.
-4. Add Gemini on Vertex AI for investigations and recommendations.
+## Demo tenants
+
+- AutoMotion Motors
+- PackPro Industries
+- FlowCore Manufacturing
+- FreshLine Foods
+
+Each client has:
+- 1 client admin account
+- 1 standard account
+
+Zero Downtime also has a super admin account with cross-client access.
+
+## Repository structure
+
+```
+frontend/          Next.js web application
+backend/           Cloud Run API
+sql/               BigQuery transformation scripts
+scripts/           Firebase user/claim setup utilities
+firestore.rules    Firestore access-control rules
+```
+
+## Security model
+
+The frontend never queries BigQuery directly.
+
+```
+Firebase Login
+  -> Firebase ID token
+  -> Cloud Run API
+  -> Token verification
+  -> role + client_id enforcement
+  -> tenant-filtered BigQuery query
+```
+
+Client users cannot query another tenant by changing frontend parameters because tenant scope is enforced server-side.
+
+## Backend deployment
+
+From the `backend` folder:
+
+```bash
+npm install
+gcloud run deploy zero-downtime-api \
+  --source . \
+  --region asia-south1 \
+  --allow-unauthenticated
+```
+
+Protected API routes still require a valid Firebase ID token.
+
+Current service URL:
+
+```
+https://zero-downtime-api-1052752541109.asia-south1.run.app
+```
+
+## Frontend setup
+
+Copy:
+
+```
+frontend/.env.example
+```
+
+to:
+
+```
+frontend/.env.local
+```
+
+and populate the Firebase web configuration values.
+
+Then:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## BigQuery pipeline
+
+Run the SQL files in order:
+
+1. `sql/01_asset_operations.sql`
+2. `sql/02_asset_observations.sql`
+3. `sql/03_current_asset_health.sql`
+4. `sql/04_client_summary_and_alerts.sql`
+
+The final serving tables are:
+
+- `current_asset_health`
+- `client_summary`
+- `active_alerts`
+- `asset_observations`
+
+## Important
+
+Do not commit passwords, Firebase private credentials, service-account keys, or `.env.local`.
