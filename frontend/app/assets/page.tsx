@@ -1,0 +1,7 @@
+"use client";
+import { useEffect,useMemo,useState } from "react";
+import Protected from "@/components/Protected";
+import RiskBadge from "@/components/RiskBadge";
+import { apiFetch } from "@/lib/api";
+import { Asset } from "@/lib/types";
+export default function Assets(){const [data,setData]=useState<Asset[]>([]);const [q,setQ]=useState('');useEffect(()=>{apiFetch<Asset[]>('/api/assets').then(setData)},[]);const filtered=useMemo(()=>data.filter(a=>`${a.asset_id} ${a.equipment_type} ${a.plant_name}`.toLowerCase().includes(q.toLowerCase())),[data,q]);return <Protected><div className="hero"><div><h1><span className="gradient-text">Asset health</span></h1><p>Latest operating state for every asset in your authorised tenant scope.</p></div><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search assets…" style={{minWidth:280,padding:'11px 14px',borderRadius:12,border:'1px solid var(--line)',background:'rgba(255,255,255,.035)',color:'white'}}/></div><div className="table-wrap"><table><thead><tr><th>Asset</th><th>Equipment</th><th>Plant</th><th>Health</th><th>Risk</th><th>Failure type</th><th>Priority</th></tr></thead><tbody>{filtered.map(a=><tr key={`${a.client_name}-${a.asset_id}`}><td><strong>{a.asset_id}</strong><div style={{fontSize:11,color:'var(--muted)'}}>{a.client_name}</div></td><td>{a.equipment_type}</td><td>{a.plant_name}</td><td>{a.health_score}</td><td><RiskBadge risk={a.risk_level}/></td><td>{a.failure_type}</td><td>{a.maintenance_priority}</td></tr>)}</tbody></table></div></Protected>}
