@@ -112,3 +112,29 @@ The final serving tables are:
 ## Important
 
 Do not commit passwords, Firebase private credentials, service-account keys, or `.env.local`.
+
+
+## One-command deployment
+
+GitHub is the source of truth for the application code.
+
+In Cloud Shell:
+
+```bash
+cd ~/zero-downtime-ai-github
+git pull origin main
+bash scripts/deploy-all.sh
+```
+
+The deployment script validates the backend, builds the frontend, and deploys both Cloud Run services.
+
+The frontend still requires a local `frontend/.env.local` file because Firebase web configuration is injected during the Next.js build. This file remains outside Git and must not contain private service-account credentials.
+
+## GitHub validation
+
+Every push to `main` now runs a GitHub Actions workflow that:
+
+- checks backend JavaScript syntax
+- installs backend dependencies
+- builds the Next.js frontend
+- catches syntax/type/build failures before the code is pulled into GCP
