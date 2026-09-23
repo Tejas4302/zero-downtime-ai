@@ -18,7 +18,7 @@ const money = (value: number) =>
 
 export default function Alerts() {
   const [data, setData] = useState<Asset[]>([]);
-  const [risk, setRisk] = useState("All");
+  const [risk, setRisk] = useState("All");\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState("");
 
   useEffect(() => {
     apiFetch<Asset[]>("/api/alerts").then(setData);
@@ -54,7 +54,7 @@ export default function Alerts() {
         </Link>
       </div>
 
-      <div className="alert-summary-strip">
+      {error && <div className="notice notice-error page-error">{error}</div>}\n\n      <div className="alert-summary-strip">
         <div>
           <span>Critical</span>
           <strong>{counts.Critical}</strong>
@@ -79,7 +79,7 @@ export default function Alerts() {
         </div>
       </div>
 
-      {visible.length ? (
+      {loading ? (\n        <div className="card state-panel"><strong>Loading maintenance queue</strong>Fetching current operational alerts…</div>\n      ) : visible.length ? (
         <div className="alert-stack">
           {visible.map((asset) => (
             <div className="card alert-row-card" key={`${asset.client_name}-${asset.asset_id}`}>
