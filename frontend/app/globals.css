@@ -336,3 +336,69 @@ body{overflow-x:hidden}
   }
   .content-copilot .chat-main{height:70vh}
 }
+
+
+/* --- Production polish pass -------------------------------------------- */
+.login-brand{position:relative;z-index:2}
+.login-ai-badge{margin-bottom:18px}
+.login-secure-badge{margin-bottom:18px}
+.login-footer{position:relative;z-index:2;color:#6f849b;font-size:12px}
+.login-btn{display:flex;align-items:center;justify-content:center;gap:8px}
+.login-btn:disabled,.btn:disabled,.prompt-button:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.access-error-page{min-height:100vh;display:grid;place-items:center;padding:24px}
+.access-error-card{max-width:520px;text-align:center}
+.access-error-card h2{margin:14px 0 8px}
+.access-error-card p{color:var(--muted);line-height:1.6;margin:0 0 20px}
+.access-error-icon{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;margin:0 auto;background:rgba(255,180,84,.09);border:1px solid rgba(255,180,84,.14);color:#ffc478}
+.mobile-nav{display:none}
+.copilot-page{height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.copilot-header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex:0 0 auto;margin-bottom:12px}
+.copilot-header h1{margin:8px 0 0;font-size:30px;letter-spacing:-.03em}
+.copilot-header p{margin:5px 0 0;color:var(--muted);font-size:13px}
+.copilot-error{margin-bottom:10px;flex:0 0 auto}
+.prompt-panel-scroll{overflow-y:auto;min-height:0}
+.state-panel{padding:36px 20px;text-align:center;color:var(--muted)}
+.state-panel strong{display:block;color:#dce8f4;margin-bottom:5px}
+.table-loading-row td{text-align:center;color:var(--muted);padding:28px}
+.page-error{margin-bottom:14px}
+
+@media (max-width:780px){
+  body{padding-bottom:68px}
+  .mobile-nav{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:60;
+    display:flex;
+    gap:4px;
+    overflow-x:auto;
+    padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);
+    background:rgba(5,13,24,.94);
+    backdrop-filter:blur(18px);
+  }
+  .mobile-nav-link{
+    flex:1 0 72px;
+    min-width:72px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    padding:7px 5px;
+    border-radius:10px;
+    color:#8298ae;
+    font-size:9px;
+    white-space:nowrap;
+  }
+  .mobile-nav-link.active{
+    color:#fff;
+    background:rgba(90,167,255,.11);
+  }
+  .topbar-right .system-live{display:none}
+  .user-pill{padding:6px 8px}
+  .user-email{display:none}
+  .content{padding-bottom:86px}
+  .content-copilot{padding-bottom:76px}
+}
