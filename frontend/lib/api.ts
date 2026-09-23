@@ -41,11 +41,11 @@ export async function apiFetch<T>(
   const user = await waitForAuthenticatedUser();
   const token = await user.getIdToken();
 
-  const response = await fetch(\`\${API_URL}\${path}\`, {
+  const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      Authorization: \`Bearer \${token}\`,
+      Authorization: `Bearer ${token}`,
       ...(options.headers || {}),
     },
     cache: "no-store",
@@ -55,7 +55,7 @@ export async function apiFetch<T>(
     const payload = await response.json().catch(() => ({}));
 
     throw new Error(
-      payload.error || \`API request failed (\${response.status})\`
+      payload.error || `API request failed (${response.status})`
     );
   }
 
