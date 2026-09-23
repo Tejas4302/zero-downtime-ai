@@ -141,6 +141,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </motion.div>
       </main>
+
+      <nav className="mobile-nav" aria-label="Mobile workspace navigation">
+        {visible.map(([href, label, Icon]) => {
+          const active = path === href || path.startsWith(href + "/");
+          return (
+            <Link key={href} href={href} className={"mobile-nav-link " + (active ? "active" : "")}>
+              <Icon size={18} />
+              <span>{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }
