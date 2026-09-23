@@ -69,11 +69,7 @@ type ChatThread = {
   messages: Message[];
 };
 
-const DEFAULT_PROJECTS: Project[] = [
-  { id: "operations", name: "Operations" },
-  { id: "maintenance", name: "Maintenance" },
-  { id: "risk-review", name: "Risk Review" },
-];
+const DEFAULT_PROJECTS: Project[] = [];
 
 const welcome =
   "I’m your Zero Downtime AI Analyst. I can connect operational health, downtime exposure, governed metrics and labelled marketplace signals to support better manufacturing decisions.";
@@ -269,6 +265,7 @@ export default function Copilot() {
 
   const streamRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handoffHandled = useRef(false);
 
   const storagePrefix = me?.uid ? "zero-downtime-copilot:" + me.uid : "";
 
@@ -304,7 +301,7 @@ export default function Copilot() {
             ? serverProjects
             : Array.isArray(localProjects) && localProjects.length
             ? localProjects
-            : DEFAULT_PROJECTS;
+            : [];
 
         setThreads(nextThreads);
         setProjects(nextProjects);
@@ -313,7 +310,7 @@ export default function Copilot() {
       } catch {
         const next = createThread(null);
         setThreads([next]);
-        setProjects(DEFAULT_PROJECTS);
+        setProjects([]);
         setActiveThreadId(next.id);
       } finally {
         setHydrated(true);
@@ -366,6 +363,16 @@ export default function Copilot() {
         .sort((a, b) => b.updatedAt - a.updatedAt),
     [threads, selectedProjectId, search]
   );
+
+  useEffect(() => {
+    if (!hydrated || !activeThread || handoffHandled.current) return;
+
+    const question = new URLSearchParams(window.location.search).get("question");
+    if (!question) return;
+
+    handoffHandled.current = true;
+    setText(question);
+  }, [hydrated, activeThread]);
 
   useEffect(() => {
     streamRef.current?.scrollTo({
@@ -588,16 +595,25 @@ export default function Copilot() {
             <div className="library-section">
               <div className="library-section-heading">
                 <span>Projects</span>
-                <button className="library-mini-button" onClick={() => setShowProjectForm((value) => !value)}>
+                <button className="library-mini-button" onClick={() => setShowProjectForm(true)} aria-label="Create project">
                   <FolderPlus size={14} />
                 </button>
               </div>
 
-              <button className={"project-row " + (selectedProjectId === null ? "active" : "")} onClick={() => setSelectedProjectId(null)}>
-                <Folder size={15} />
-                <span>All chats</span>
-                <small>{threads.length}</small>
-              </button>
+              {projects.length === 0 && !showProjectForm ? (
+                <button className="create-project-empty" onClick={() => setShowProjectForm(true)}>
+                  <FolderPlus size={15} />
+                  <span>Create your first project</span>
+                </button>
+              ) : null}
+
+              {projects.length > 0 ? (
+                <button className={"project-row " + (selectedProjectId === null ? "active" : "")} onClick={() => setSelectedProjectId(null)}>
+                  <Folder size={15} />
+                  <span>All project chats</span>
+                  <small>{threads.filter((thread) => thread.projectId).length}</small>
+                </button>
+              ) : null}
 
               {projects.map((project) => {
                 const count = threads.filter((thread) => thread.projectId === project.id).length;
