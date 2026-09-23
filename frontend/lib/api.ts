@@ -1,18 +1,63 @@
+import {
+  onAuthStateChanged,
+  type User,
+} from "firebase/auth";
 import { auth } from "./firebase";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://zero-downtime-api-1052752541109.asia-south1.run.app";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://zero-downtime-api-1052752541109.asia-south1.run.app";
 
-export async function apiFetch<T>(path: string): Promise<T> {
-  const user = auth.currentUser;
-  if (!user) throw new Error("Not authenticated");
+function waitForAuthenticatedUser(): Promise<User> {
+  return new Promise((resolve, reject) => {
+    if (auth.currentUser) {
+      resolve(auth.currentUser);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        unsubscribe();
+
+        if (user) {
+          resolve(user);
+        } else {
+          reject(new Error("Not authenticated"));
+        }
+      },
+      (error) => {
+        unsubscribe();
+        reject(error);
+      }
+    );
+  });
+}
+
+export async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const user = await waitForAuthenticatedUser();
   const token = await user.getIdToken();
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+
+  const response = await fetch(\`\${API_URL}\${path}\`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: \`Bearer \${token}\`,
+      ...(options.headers || {}),
+    },
     cache: "no-store",
   });
-  if (!res.ok) {
-    const payload = await res.json().catch(() => ({}));
-    throw new Error(payload.error || `Request failed (${res.status})`);
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+
+    throw new Error(
+      payload.error || \`API request failed (\${response.status})\`
+    );
   }
-  return res.json();
+
+  return response.json();
 }
