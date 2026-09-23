@@ -132,7 +132,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <motion.div
-          className="content"
+          className={`content ${path === "/copilot" ? "content-copilot" : ""}`}
           key={path}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
