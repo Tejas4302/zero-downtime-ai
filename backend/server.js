@@ -235,6 +235,93 @@ app.get("/api/clients", authenticate, requireSuperAdmin, async (req, res) => {
   }
 });
 
+
+app.get("/api/users", authenticate, async (req, res) => {
+  try {
+    if (!["super_admin", "client_admin"].includes(req.user.role)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const result = [];
+    let pageToken;
+
+    do {
+      const page = await auth.listUsers(1000, pageToken);
+
+      for (const user of page.users) {
+        const claims = user.customClaims || {};
+        const role = claims.role;
+        const clientId = claims.client_id;
+
+        if (
+          req.user.role === "client_admin" &&
+          clientId !== req.user.client_id
+        ) {
+          continue;
+        }
+
+        if (!role) continue;
+
+        result.push({
+          uid: user.uid,
+          email: user.email || "",
+          role,
+          client_id: clientId || "",
+          disabled: user.disabled,
+          last_sign_in: user.metadata.lastSignInTime || null,
+          created_at: user.metadata.creationTime || null,
+        });
+      }
+
+      pageToken = page.pageToken;
+    } while (pageToken);
+
+    result.sort((a, b) => a.email.localeCompare(b.email));
+    res.json(result);
+  } catch (error) {
+    console.error("Users error:", error);
+    res.status(500).json({ error: "Failed to load users" });
+  }
+});
+
+app.get("/api/assets/:assetId/history", authenticate, async (req, res) => {
+  try {
+    const clientName = getAuthorizedClient(req);
+    const assetId = String(req.params.assetId || "").trim();
+
+    if (!assetId || assetId.length > 32) {
+      return res.status(400).json({ error: "Invalid asset ID" });
+    }
+
+    let query =
+      "SELECT client_name, plant_name, asset_id, equipment_type, observation_timestamp, " +
+      "air_temperature_k, process_temperature_k, rotational_speed_rpm, torque_nm, " +
+      "tool_wear_min, machine_failure, failure_type, risk_level, health_score, recommended_action " +
+      "FROM " + table("asset_observations") +
+      " WHERE asset_id = @assetId";
+
+    const params = { assetId };
+
+    if (clientName) {
+      query += " AND client_name = @clientName";
+      params.clientName = clientName;
+    }
+
+    query += " ORDER BY observation_timestamp DESC LIMIT 48";
+
+    const [rows] = await bigquery.query({
+      query,
+      location: BIGQUERY_REGION,
+      params,
+    });
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Asset history error:", error);
+    res.status(500).json({ error: "Failed to load asset history" });
+  }
+});
+
 app.post("/api/copilot", authenticate, async (req, res) => {
   try {
     const question =
