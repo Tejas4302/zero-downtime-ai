@@ -143,20 +143,11 @@ export default function Copilot() {
                   </div>
                 )}
                 <div className="message-body">
-                  {message.text.split("\n").map((line, lineIndex) => (
-                    <div
-                      key={lineIndex}
-                      className={
-                        line.startsWith("**") || line.endsWith("**")
-                          ? "message-heading"
-                          : line.trim().startsWith("*")
-                          ? "message-bullet"
-                          : ""
-                      }
-                    >
-                      {line.replace(/^\*\s+/, "").replace(/\*\*/g, "") || " "}
-                    </div>
-                  ))}
+                  {message.role === "ai" ? (
+                    <RichAnswer text={message.text} />
+                  ) : (
+                    <p className="user-message-text">{message.text}</p>
+                  )}
                 </div>
               </div>
             ))}
