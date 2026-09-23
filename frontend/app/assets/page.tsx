@@ -22,21 +22,33 @@ export default function Assets() {
   const [plantFilter, setPlantFilter] = useState("All");
   const [selected, setSelected] = useState<Asset | null>(null);
   const [history, setHistory] = useState<AssetHistory[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState("");\n  const [historyError, setHistoryError] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    apiFetch<Asset[]>("/api/assets").then(setData);
+    apiFetch<Asset[]>("/api/assets")
+      .then(setData)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load assets"))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     if (!selected) {
       setHistory([]);
+      setHistoryError("");
       return;
     }
 
     setHistoryLoading(true);
-    apiFetch<AssetHistory[]>(`/api/assets/${encodeURIComponent(selected.asset_id)}/history`)
+    setHistoryError("");
+
+    apiFetch<AssetHistory[]>("/api/assets/" + encodeURIComponent(selected.asset_id) + "/history")
       .then(setHistory)
+      .catch((err) =>
+        setHistoryError(err instanceof Error ? err.message : "Failed to load asset history")
+      )
       .finally(() => setHistoryLoading(false));
   }, [selected]);
 
@@ -47,10 +59,16 @@ export default function Assets() {
 
   const filtered = useMemo(() => {
     return data.filter((asset) => {
-      const matchesSearch = `${asset.asset_id} ${asset.equipment_type} ${asset.plant_name} ${asset.failure_type}`
-        .toLowerCase()
-        .includes(query.toLowerCase());
+      const haystack = [
+        asset.asset_id,
+        asset.equipment_type,
+        asset.plant_name,
+        asset.failure_type,
+      ]
+        .join(" ")
+        .toLowerCase();
 
+      const matchesSearch = haystack.includes(query.toLowerCase());
       const matchesRisk = riskFilter === "All" || asset.risk_level === riskFilter;
       const matchesPlant = plantFilter === "All" || asset.plant_name === plantFilter;
 
@@ -77,7 +95,9 @@ export default function Assets() {
         </div>
       </div>
 
-      {error && <div className="notice notice-error page-error">{error}</div>}\n\n      <div className="filter-bar">
+      {error && <div className="notice notice-error page-error">{error}</div>}
+
+      <div className="filter-bar">
         <div className="search-box">
           <Search size={16} />
           <input
@@ -111,55 +131,67 @@ export default function Assets() {
         </div>
       </div>
 
-      {loading ? (\n        <div className="card state-panel"><strong>Loading asset health</strong>Fetching the latest authorised asset states…</div>\n      ) : filtered.length === 0 ? (\n        <div className="card state-panel"><strong>No assets found</strong>Adjust the search or filters to see more assets.</div>\n      ) : (\n      <div className="table-wrap asset-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Asset</th>
-              <th>Equipment</th>
-              <th>Plant</th>
-              <th>Health</th>
-              <th>Risk</th>
-              <th>Failure type</th>
-              <th>Maintenance</th>
-              <th>Exposure</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((asset) => (
-              <tr
-                key={`${asset.client_name}-${asset.asset_id}`}
-                onClick={() => setSelected(asset)}
-                className="clickable-row"
-              >
-                <td>
-                  <strong>{asset.asset_id}</strong>
-                  <div className="subtle-text">{asset.client_name}</div>
-                </td>
-                <td>{asset.equipment_type}</td>
-                <td>{asset.plant_name}</td>
-                <td>
-                  <div className="health-cell">
-                    <strong>{asset.health_score}</strong>
-                    <div className="health-track">
-                      <div
-                        className={healthClass(asset.health_score)}
-                        style={{ width: `${Math.max(4, Math.min(100, asset.health_score))}%` }}
-                      />
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <RiskBadge risk={asset.risk_level} />
-                </td>
-                <td>{asset.failure_type}</td>
-                <td>{asset.maintenance_priority}</td>
-                <td>{money(asset.estimated_downtime_cost_inr)}</td>
+      {loading ? (
+        <div className="card state-panel">
+          <strong>Loading asset health</strong>
+          Fetching the latest authorised asset states…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card state-panel">
+          <strong>No assets found</strong>
+          Adjust the search or filters to see more assets.
+        </div>
+      ) : (
+        <div className="table-wrap asset-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Asset</th>
+                <th>Equipment</th>
+                <th>Plant</th>
+                <th>Health</th>
+                <th>Risk</th>
+                <th>Failure type</th>
+                <th>Maintenance</th>
+                <th>Exposure</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filtered.map((asset) => (
+                <tr
+                  key={asset.client_name + "-" + asset.asset_id}
+                  onClick={() => setSelected(asset)}
+                  className="clickable-row"
+                >
+                  <td>
+                    <strong>{asset.asset_id}</strong>
+                    <div className="subtle-text">{asset.client_name}</div>
+                  </td>
+                  <td>{asset.equipment_type}</td>
+                  <td>{asset.plant_name}</td>
+                  <td>
+                    <div className="health-cell">
+                      <strong>{asset.health_score}</strong>
+                      <div className="health-track">
+                        <div
+                          className={healthClass(asset.health_score)}
+                          style={{ width: Math.max(4, Math.min(100, asset.health_score)) + "%" }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <RiskBadge risk={asset.risk_level} />
+                  </td>
+                  <td>{asset.failure_type}</td>
+                  <td>{asset.maintenance_priority}</td>
+                  <td>{money(asset.estimated_downtime_cost_inr)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {selected && (
         <div className="drawer-backdrop" onClick={() => setSelected(null)}>
@@ -170,7 +202,12 @@ export default function Assets() {
                 <h2>{selected.asset_id}</h2>
                 <p>{selected.equipment_type}</p>
               </div>
-              <button className="icon-button" onClick={() => setSelected(null)} aria-label="Close asset details">
+
+              <button
+                className="icon-button"
+                onClick={() => setSelected(null)}
+                aria-label="Close asset details"
+              >
                 <X size={18} />
               </button>
             </div>
@@ -224,9 +261,12 @@ export default function Assets() {
 
             <div className="drawer-section">
               <div className="drawer-section-title">Recent observations</div>
+
               {historyLoading ? (
-                <div className="subtle-text">Loading history...</div>
-              ) : historyError ? (\n                <div className="error">{historyError}</div>\n              ) : history.length ? (
+                <div className="subtle-text">Loading history…</div>
+              ) : historyError ? (
+                <div className="error">{historyError}</div>
+              ) : history.length ? (
                 <div className="history-list">
                   {history.slice(0, 6).map((row, index) => (
                     <div className="history-row" key={index}>
