@@ -69,3 +69,86 @@ export type AppUser = {
   last_sign_in: string | null;
   created_at: string | null;
 };
+
+
+export type MarketSignal = {
+  id: string;
+  domain: string;
+  signal: string;
+  direction: "up" | "down" | "flat";
+  impact: "High" | "Medium" | "Low";
+  confidence: number;
+  note: string;
+  source: string;
+  client_id: string;
+  client_name: string;
+};
+
+export type MetricDefinition = {
+  id: string;
+  name: string;
+  definition: string;
+  formula: string;
+  owner: string;
+  source: string;
+  cadence: string;
+  status: string;
+};
+
+export type EvidenceItem = {
+  type: string;
+  label: string;
+  value: number;
+  unit: string;
+  source: string;
+};
+
+export type EvidenceChart = {
+  title: string;
+  type: "bar";
+  data: Array<{ label: string; value: number }>;
+};
+
+export type Explainability = {
+  summary: string;
+  factors: string[];
+  sources: string[];
+};
+
+export type Scenario = {
+  id: string;
+  name: string;
+  baselineExposure: number;
+  downtimeReductionPercent: number;
+  interventionCost: number;
+  avoidedLoss: number;
+  netBenefit: number;
+  roiPercent: number;
+  createdAt: number;
+};
+
+export type Decision = {
+  id: string;
+  title: string;
+  status: "Draft" | "Review" | "Approved";
+  owner: string;
+  rationale: string;
+  expectedImpact: string;
+  sourceType: "AI" | "Scenario" | "Manual";
+  createdAt: number;
+};
+
+export type DecisionBrief = {
+  id: string;
+  title: string;
+  brief: string;
+  createdAt: number;
+};
+
+export type WorkspaceState = {
+  threads?: unknown[];
+  projects?: unknown[];
+  scenarios?: Scenario[];
+  decisions?: Decision[];
+  briefs?: DecisionBrief[];
+};
