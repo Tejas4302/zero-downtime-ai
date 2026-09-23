@@ -18,7 +18,23 @@ export default function DecisionsPage() {
     apiFetch<WorkspaceState>("/api/workspace").then((workspace) => {
       setDecisions(workspace.decisions || []);
 
-      const scenario = new URLSearchParams(window.location.search).get("scenario");
+      const params = new URLSearchParams(window.location.search);
+
+      if (params.get("from") === "brief") {
+        try {
+          const rawBrief = localStorage.getItem("zero-downtime-decision-brief");
+          if (rawBrief) {
+            const brief = JSON.parse(rawBrief);
+            setTitle(brief.title || "AI Decision Brief");
+            setRationale(String(brief.brief || "").slice(0, 1200));
+            setImpact("Generated from AI Analyst evidence and decision-brief workflow.");
+          }
+        } catch {
+          // Ignore malformed brief handoff.
+        }
+      }
+
+      const scenario = params.get("scenario");
       if (scenario) {
         try {
           const parsed = JSON.parse(scenario);
@@ -59,7 +75,11 @@ export default function DecisionsPage() {
       owner: owner.trim() || "Operations",
       rationale: rationale.trim(),
       expectedImpact: impact.trim(),
-      sourceType: window.location.search.includes("scenario=") ? "Scenario" : "Manual",
+      sourceType: window.location.search.includes("from=brief")
+        ? "AI"
+        : window.location.search.includes("scenario=")
+        ? "Scenario"
+        : "Manual",
       createdAt: Date.now(),
     };
 
