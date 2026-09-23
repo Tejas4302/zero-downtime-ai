@@ -402,3 +402,17 @@ body{overflow-x:hidden}
   .content{padding-bottom:86px}
   .content-copilot{padding-bottom:76px}
 }
+
+
+/* Final Copilot viewport override: the page frame never scrolls on desktop. */
+@media (min-width:781px){
+  .content-copilot .copilot-page>.chat-shell{
+    flex:1;
+    height:auto;
+    min-height:0;
+  }
+  .content-copilot .copilot-page>.chat-shell>.chat-main,
+  .content-copilot .copilot-page>.chat-shell>.prompt-panel{
+    min-height:0;
+  }
+}
