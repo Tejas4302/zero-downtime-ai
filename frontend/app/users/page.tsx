@@ -17,17 +17,23 @@ const roleLabel = (role: string) =>
 export default function Users() {
   const { me } = useAuth();
   const [users, setUsers] = useState<AppUser[]>([]);
-  const [error, setError] = useState("");\n  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!me || me.role === "standard") return;
 
+    setLoading(true);
+    setError("");
+
     apiFetch<AppUser[]>("/api/users")
       .then(setUsers)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load users"));
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load users"))
+      .finally(() => setLoading(false));
   }, [me]);
 
   const activeCount = useMemo(() => users.filter((user) => !user.disabled).length, [users]);
+
   const adminCount = useMemo(
     () => users.filter((user) => user.role === "client_admin" || user.role === "super_admin").length,
     [users]
@@ -46,7 +52,10 @@ export default function Users() {
       </div>
 
       {me?.role === "standard" ? (
-        <div className="card empty">You do not have permission to manage users.</div>
+        <div className="card state-panel">
+          <strong>Administrator access required</strong>
+          Your role does not include user-management permissions.
+        </div>
       ) : (
         <>
           <div className="grid grid-3">
@@ -57,6 +66,7 @@ export default function Users() {
                 <strong>{users.length}</strong>
               </div>
             </div>
+
             <div className="card compact-metric">
               <ShieldCheck size={18} />
               <div>
@@ -64,6 +74,7 @@ export default function Users() {
                 <strong>{activeCount}</strong>
               </div>
             </div>
+
             <div className="card compact-metric">
               <UserCog size={18} />
               <div>
@@ -73,41 +84,57 @@ export default function Users() {
             </div>
           </div>
 
-          {error && <div className="notice notice-error">{error}</div>}
+          {error && <div className="notice notice-error page-error">{error}</div>}
 
-          {loading ? (\n            <div className="card state-panel"><strong>Loading user access</strong>Reading authorised Firebase accounts…</div>\n          ) : (\n          <div className="table-wrap users-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Role</th>
-                  <th>Tenant</th>
-                  <th>Status</th>
-                  <th>Last sign-in</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user.uid}>
-                    <td>
-                      <strong>{user.email}</strong>
-                      <div className="subtle-text">{user.uid.slice(0, 10)}…</div>
-                    </td>
-                    <td>
-                      <span className="role-pill">{roleLabel(user.role)}</span>
-                    </td>
-                    <td>{user.client_id === "GLOBAL" ? "All clients" : user.client_id}</td>
-                    <td>
-                      <span className={`status-pill ${user.disabled ? "disabled" : "active"}`}>
-                        {user.disabled ? "Disabled" : "Active"}
-                      </span>
-                    </td>
-                    <td>{user.last_sign_in ? new Date(user.last_sign_in).toLocaleString() : "Never"}</td>
+          {loading ? (
+            <div className="card state-panel">
+              <strong>Loading user access</strong>
+              Reading authorised Firebase accounts…
+            </div>
+          ) : users.length === 0 ? (
+            <div className="card state-panel">
+              <strong>No users visible</strong>
+              No authorised accounts were returned for this tenant scope.
+            </div>
+          ) : (
+            <div className="table-wrap users-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Tenant</th>
+                    <th>Status</th>
+                    <th>Last sign-in</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.uid}>
+                      <td>
+                        <strong>{user.email}</strong>
+                        <div className="subtle-text">{user.uid.slice(0, 10)}…</div>
+                      </td>
+                      <td>
+                        <span className="role-pill">{roleLabel(user.role)}</span>
+                      </td>
+                      <td>{user.client_id === "GLOBAL" ? "All clients" : user.client_id}</td>
+                      <td>
+                        <span className={"status-pill " + (user.disabled ? "disabled" : "active")}>
+                          {user.disabled ? "Disabled" : "Active"}
+                        </span>
+                      </td>
+                      <td>
+                        {user.last_sign_in
+                          ? new Date(user.last_sign_in).toLocaleString()
+                          : "Never"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </Protected>
