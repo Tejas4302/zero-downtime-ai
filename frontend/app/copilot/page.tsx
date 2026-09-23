@@ -107,6 +107,16 @@ function RichAnswer({ text }: { text: string }) {
       {lines.map((line, index) => {
         if (!line) return <div className="ai-spacer" key={index} />;
 
+        const numbered = line.match(/^(\d+)[.)]\s+(.*)$/);
+        if (numbered) {
+          return (
+            <div className="ai-step" key={index}>
+              <span className="ai-step-number">{numbered[1]}</span>
+              <span>{numbered[2]}</span>
+            </div>
+          );
+        }
+
         if (/^[-•]\s+/.test(line)) {
           return (
             <div className="ai-bullet" key={index}>
@@ -118,7 +128,7 @@ function RichAnswer({ text }: { text: string }) {
 
         if (
           /:$/.test(line) ||
-          /^(summary|key insight|evidence|recommended action|what this means|next steps|priority|immediate attention)/i.test(
+          /^(summary|key insight|evidence|action plan|recommended action|what this means|next steps|priority|immediate attention)/i.test(
             line
           )
         ) {
