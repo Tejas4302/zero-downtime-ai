@@ -22,7 +22,7 @@ export default function Assets() {
   const [plantFilter, setPlantFilter] = useState("All");
   const [selected, setSelected] = useState<Asset | null>(null);
   const [history, setHistory] = useState<AssetHistory[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState("");\n  const [historyError, setHistoryError] = useState("");
 
   useEffect(() => {
     apiFetch<Asset[]>("/api/assets").then(setData);
@@ -77,7 +77,7 @@ export default function Assets() {
         </div>
       </div>
 
-      <div className="filter-bar">
+      {error && <div className="notice notice-error page-error">{error}</div>}\n\n      <div className="filter-bar">
         <div className="search-box">
           <Search size={16} />
           <input
@@ -111,7 +111,7 @@ export default function Assets() {
         </div>
       </div>
 
-      <div className="table-wrap asset-table">
+      {loading ? (\n        <div className="card state-panel"><strong>Loading asset health</strong>Fetching the latest authorised asset states…</div>\n      ) : filtered.length === 0 ? (\n        <div className="card state-panel"><strong>No assets found</strong>Adjust the search or filters to see more assets.</div>\n      ) : (\n      <div className="table-wrap asset-table">
         <table>
           <thead>
             <tr>
@@ -226,7 +226,7 @@ export default function Assets() {
               <div className="drawer-section-title">Recent observations</div>
               {historyLoading ? (
                 <div className="subtle-text">Loading history...</div>
-              ) : history.length ? (
+              ) : historyError ? (\n                <div className="error">{historyError}</div>\n              ) : history.length ? (
                 <div className="history-list">
                   {history.slice(0, 6).map((row, index) => (
                     <div className="history-row" key={index}>
