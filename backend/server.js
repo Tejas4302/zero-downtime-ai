@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { BigQuery } = require("@google-cloud/bigquery");
 const { GoogleGenAI } = require("@google/genai");
 
@@ -13,6 +14,7 @@ const VERTEX_LOCATION = "global";
 initializeApp({ projectId: PROJECT_ID });
 
 const auth = getAuth();
+const db = getFirestore();
 const bigquery = new BigQuery({ projectId: PROJECT_ID });
 const genAI = new GoogleGenAI({
   vertexai: true,
@@ -35,6 +37,50 @@ const CLIENT_MAP = {
 };
 
 const ALLOWED_ROLES = new Set(["super_admin", "client_admin", "standard"]);
+
+const MARKET_SIGNALS = {
+  automotion: [
+    { id: "steel-cost", domain: "Input cost", signal: "Steel cost pressure", direction: "up", impact: "High", confidence: 0.82, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" },
+    { id: "ev-demand", domain: "Demand", signal: "EV demand momentum", direction: "up", impact: "Medium", confidence: 0.76, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" },
+    { id: "supplier-lead", domain: "Supply", signal: "Tier-2 supplier lead-time risk", direction: "up", impact: "High", confidence: 0.79, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" }
+  ],
+  packpro: [
+    { id: "resin-cost", domain: "Input cost", signal: "Packaging resin cost pressure", direction: "up", impact: "Medium", confidence: 0.74, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" },
+    { id: "fmcg-demand", domain: "Demand", signal: "FMCG packaging demand", direction: "up", impact: "Medium", confidence: 0.71, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" },
+    { id: "freight", domain: "Logistics", signal: "Freight volatility", direction: "up", impact: "Medium", confidence: 0.69, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" }
+  ],
+  flowcore: [
+    { id: "energy", domain: "Energy", signal: "Industrial energy cost pressure", direction: "up", impact: "High", confidence: 0.81, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" },
+    { id: "capex", domain: "Demand", signal: "Industrial capex demand", direction: "flat", impact: "Medium", confidence: 0.68, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" },
+    { id: "components", domain: "Supply", signal: "Motor component availability", direction: "down", impact: "Medium", confidence: 0.73, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" }
+  ],
+  freshline: [
+    { id: "cold-chain", domain: "Logistics", signal: "Cold-chain transport cost", direction: "up", impact: "High", confidence: 0.84, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" },
+    { id: "seasonality", domain: "Demand", signal: "Seasonal demand uplift", direction: "up", impact: "High", confidence: 0.78, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" },
+    { id: "energy-food", domain: "Energy", signal: "Refrigeration energy pressure", direction: "up", impact: "Medium", confidence: 0.77, note: "Illustrative market signal for demo scenarios.", source: "Demo market feed" }
+  ]
+};
+
+const METRIC_GOVERNANCE = [
+  { id: "asset-health", name: "Asset Health Score", definition: "Composite indicator of current asset operating condition.", formula: "Rule-based weighted score from failure flags and operating conditions.", owner: "Reliability Engineering", source: "current_asset_health", cadence: "Latest observation", status: "Certified" },
+  { id: "downtime-exposure", name: "Downtime Exposure", definition: "Estimated financial exposure associated with current asset risk.", formula: "Estimated downtime hours × configured hourly exposure.", owner: "Plant Finance", source: "client_summary / current_asset_health", cadence: "Latest observation", status: "Certified" },
+  { id: "risk-level", name: "Risk Level", definition: "Operational urgency classification for an asset.", formula: "Critical / High / Medium / Low based on failure and health thresholds.", owner: "Operations Excellence", source: "current_asset_health", cadence: "Latest observation", status: "Certified" },
+  { id: "healthy-percent", name: "Healthy Asset %", definition: "Share of monitored assets currently classified healthy.", formula: "Healthy assets ÷ total assets × 100.", owner: "Operations Excellence", source: "client_summary", cadence: "Current state", status: "Certified" }
+];
+
+function marketSignalsFor(req) {
+  if (req.user.role === "super_admin") {
+    return Object.entries(MARKET_SIGNALS).flatMap(([clientId, signals]) =>
+      signals.map((signal) => ({ ...signal, client_id: clientId, client_name: CLIENT_MAP[clientId] }))
+    );
+  }
+  return (MARKET_SIGNALS[req.user.client_id] || []).map((signal) => ({
+    ...signal,
+    client_id: req.user.client_id,
+    client_name: CLIENT_MAP[req.user.client_id]
+  }));
+}
+
 
 app.use(
   cors({
@@ -322,6 +368,91 @@ app.get("/api/assets/:assetId/history", authenticate, async (req, res) => {
   }
 });
 
+
+app.get("/api/intelligence", authenticate, async (req, res) => {
+  try {
+    const clientName = getAuthorizedClient(req);
+
+    let summaryQuery = "SELECT * FROM " + table("client_summary");
+    const params = {};
+
+    if (clientName) {
+      summaryQuery += " WHERE client_name = @clientName";
+      params.clientName = clientName;
+    }
+
+    summaryQuery += " ORDER BY downtime_risk_inr DESC";
+
+    const [summaryRows] = await bigquery.query({
+      query: summaryQuery,
+      location: BIGQUERY_REGION,
+      params,
+    });
+
+    res.json({
+      signals: marketSignalsFor(req),
+      operations: summaryRows,
+      disclaimer: "Marketplace signals are illustrative demo intelligence and are not a live external market feed."
+    });
+  } catch (error) {
+    console.error("Intelligence error:", error);
+    res.status(500).json({ error: "Failed to load intelligence" });
+  }
+});
+
+app.get("/api/metrics", authenticate, (req, res) => {
+  res.json({
+    metrics: METRIC_GOVERNANCE,
+    scope: req.user.client_id === "GLOBAL" ? "All clients" : req.user.client_id
+  });
+});
+
+app.get("/api/workspace", authenticate, async (req, res) => {
+  try {
+    const ref = db.collection("workspace_state").doc(req.user.uid);
+    const snap = await ref.get();
+
+    if (!snap.exists) {
+      return res.json({
+        threads: [],
+        projects: [],
+        scenarios: [],
+        decisions: [],
+        briefs: []
+      });
+    }
+
+    res.json(snap.data());
+  } catch (error) {
+    console.error("Workspace read error:", error);
+    res.status(500).json({ error: "Failed to load workspace state" });
+  }
+});
+
+app.put("/api/workspace", authenticate, async (req, res) => {
+  try {
+    const allowedKeys = ["threads", "projects", "scenarios", "decisions", "briefs"];
+    const update = {};
+
+    for (const key of allowedKeys) {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, key)) {
+        update[key] = req.body[key];
+      }
+    }
+
+    update.updated_at = FieldValue.serverTimestamp();
+    update.user_id = req.user.uid;
+    update.client_id = req.user.client_id;
+
+    await db.collection("workspace_state").doc(req.user.uid).set(update, { merge: true });
+
+    res.json({ status: "saved" });
+  } catch (error) {
+    console.error("Workspace write error:", error);
+    res.status(500).json({ error: "Failed to save workspace state" });
+  }
+});
+
 function cleanCopilotAnswer(value) {
   return String(value || "")
     .replace(/\*\*/g, "")
@@ -410,6 +541,8 @@ app.post("/api/copilot", authenticate, async (req, res) => {
       },
       portfolio_summary: summaryRows,
       active_alerts: alertRows,
+      marketplace_signals: marketSignalsFor(req),
+      governed_metrics: METRIC_GOVERNANCE,
     };
 
     const conversationContext = history.length
@@ -439,6 +572,8 @@ app.post("/api/copilot", authenticate, async (req, res) => {
       "- Use short section headings on their own line, followed by hyphen bullets where useful.",
       "- For asset lists, keep each asset compact: Asset ID, plant, equipment, health, recommended action, and exposure.",
       "- For follow-up questions, use the supplied conversation context only to understand the user's intent. Operational facts must still come from the authorised data.",
+      "- Perform cross-domain reasoning only when the supplied operations, marketplace signals, and governed metric definitions support it.",
+      "- Marketplace signals are illustrative demo intelligence. Never present them as live external facts.",
       "",
       "RECENT CONVERSATION:",
       conversationContext,
@@ -464,13 +599,90 @@ app.post("/api/copilot", authenticate, async (req, res) => {
         ? response.text
         : "I could not generate a response from the available operational context.";
 
+    const cleanedAnswer = cleanCopilotAnswer(rawAnswer);
+
+    const evidence = [
+      ...summaryRows.slice(0, 4).map((row) => ({
+        type: "portfolio",
+        label: row.client_name,
+        value: Number(row.downtime_risk_inr || 0),
+        unit: "INR downtime exposure",
+        source: "client_summary"
+      })),
+      ...alertRows.slice(0, 5).map((row) => ({
+        type: "asset",
+        label: row.asset_id,
+        value: Number(row.health_score || 0),
+        unit: "health score",
+        source: "active_alerts"
+      }))
+    ];
+
+    const chart = {
+      title: "Downtime exposure by client",
+      type: "bar",
+      data: summaryRows.map((row) => ({
+        label: row.client_name,
+        value: Number(row.downtime_risk_inr || 0)
+      }))
+    };
+
+    const explainability = {
+      summary: "This answer is grounded in authorised BigQuery operational data, governed metric definitions, and clearly labelled demo marketplace signals when relevant.",
+      factors: [
+        alertRows.length ? "Active alert severity and asset health" : "Current portfolio health",
+        summaryRows.length ? "Estimated downtime exposure" : "Available authorised summary data",
+        "Tenant scope enforced by Firebase claims and the backend"
+      ],
+      sources: ["client_summary", "active_alerts", "METRIC_GOVERNANCE", "Demo market feed"]
+    };
+
     res.json({
-      answer: cleanCopilotAnswer(rawAnswer),
+      answer: cleanedAnswer,
       scope: clientName || "All clients",
+      evidence,
+      chart,
+      explainability
     });
   } catch (error) {
     console.error("Copilot error:", error);
     res.status(500).json({ error: "Failed to generate copilot response" });
+  }
+});
+
+
+app.post("/api/decision-brief", authenticate, async (req, res) => {
+  try {
+    const title = typeof req.body?.title === "string" ? req.body.title.trim() : "Decision Brief";
+    const context = req.body?.context || {};
+    const clientName = getAuthorizedClient(req);
+
+    const prompt = [
+      "Create a concise manufacturing decision brief.",
+      "Use only the supplied context.",
+      "Return plain text with these headings: Decision, Situation, Evidence, Options, Recommendation, Risks, Next Steps.",
+      "Do not use markdown symbols.",
+      "",
+      "Scope: " + (clientName || "All clients"),
+      "Title: " + title,
+      "Context:",
+      JSON.stringify(context, null, 2)
+    ].join("\n");
+
+    const response = await genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: { temperature: 0.15, maxOutputTokens: 900 }
+    });
+
+    res.json({
+      title,
+      brief: cleanCopilotAnswer(response.text || "Unable to generate a decision brief."),
+      scope: clientName || "All clients"
+    });
+  } catch (error) {
+    console.error("Decision brief error:", error);
+    res.status(500).json({ error: "Failed to generate decision brief" });
   }
 });
 
