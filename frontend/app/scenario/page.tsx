@@ -30,6 +30,33 @@ export default function ScenarioPage() {
     ]).then(([summaryRows, workspace]) => {
       setSummary(summaryRows);
       setSaved(workspace.scenarios || []);
+
+      if (new URLSearchParams(window.location.search).get("from") === "ai") {
+        try {
+          const raw = localStorage.getItem("zero-downtime-scenario-handoff");
+          if (raw) {
+            const handoff = JSON.parse(raw);
+            setName("AI Analyst recommendation scenario");
+
+            const exposure = Array.isArray(handoff.evidence)
+              ? handoff.evidence
+                  .filter((item: { unit?: string }) =>
+                    String(item.unit || "").toLowerCase().includes("inr")
+                  )
+                  .reduce(
+                    (sum: number, item: { value?: number }) => sum + Number(item.value || 0),
+                    0
+                  )
+              : 0;
+
+            if (exposure > 0) {
+              setInterventionCost(Math.round(exposure * 0.2));
+            }
+          }
+        } catch {
+          // Ignore malformed handoff data.
+        }
+      }
     });
   }, []);
 
