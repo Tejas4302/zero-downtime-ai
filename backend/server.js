@@ -91,19 +91,14 @@ async function authenticate(req, res, next) {
 function getAuthorizedClient(req) {
   const { role, client_id } = req.user;
 
-  if (role === "super_admin" && client_id === "GLOBAL") {
-    return null;
-  }
+  if (role === "super_admin" && client_id === "GLOBAL") return null;
 
   if (!["client_admin", "standard"].includes(role)) {
     throw new Error("Unauthorized role");
   }
 
   const clientName = CLIENT_MAP[client_id];
-
-  if (!clientName) {
-    throw new Error("Invalid client scope");
-  }
+  if (!clientName) throw new Error("Invalid client scope");
 
   return clientName;
 }
@@ -112,8 +107,11 @@ function requireSuperAdmin(req, res, next) {
   if (req.user.role !== "super_admin" || req.user.client_id !== "GLOBAL") {
     return res.status(403).json({ error: "Super admin access required" });
   }
-
   next();
+}
+
+function table(name) {
+  return "`" + PROJECT_ID + "." + DATASET_ID + "." + name + "`";
 }
 
 app.get("/", (req, res) => {
@@ -132,12 +130,7 @@ app.get("/api/me", authenticate, (req, res) => {
 app.get("/api/summary", authenticate, async (req, res) => {
   try {
     const clientName = getAuthorizedClient(req);
-
-    let query = \`
-      SELECT *
-      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.client_summary\\\`
-    \`;
-
+    let query = "SELECT * FROM " + table("client_summary");
     const params = {};
 
     if (clientName) {
@@ -164,29 +157,13 @@ app.get("/api/assets", authenticate, async (req, res) => {
   try {
     const clientName = getAuthorizedClient(req);
 
-    let query = \`
-      SELECT
-        client_name,
-        plant_name,
-        asset_id,
-        equipment_type,
-        machine_type,
-        observation_timestamp,
-        air_temperature_k,
-        process_temperature_k,
-        rotational_speed_rpm,
-        torque_nm,
-        tool_wear_min,
-        machine_failure,
-        failure_type,
-        risk_level,
-        health_score,
-        recommended_action,
-        maintenance_priority,
-        estimated_downtime_hours,
-        estimated_downtime_cost_inr
-      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.current_asset_health\\\`
-    \`;
+    let query =
+      "SELECT client_name, plant_name, asset_id, equipment_type, machine_type, " +
+      "observation_timestamp, air_temperature_k, process_temperature_k, " +
+      "rotational_speed_rpm, torque_nm, tool_wear_min, machine_failure, " +
+      "failure_type, risk_level, health_score, recommended_action, " +
+      "maintenance_priority, estimated_downtime_hours, estimated_downtime_cost_inr " +
+      "FROM " + table("current_asset_health");
 
     const params = {};
 
@@ -195,16 +172,12 @@ app.get("/api/assets", authenticate, async (req, res) => {
       params.clientName = clientName;
     }
 
-    query += \`
-      ORDER BY
-        CASE risk_level
-          WHEN 'Critical' THEN 1
-          WHEN 'High' THEN 2
-          WHEN 'Medium' THEN 3
-          ELSE 4
-        END,
-        health_score ASC
-    \`;
+    query +=
+      " ORDER BY CASE risk_level " +
+      "WHEN 'Critical' THEN 1 " +
+      "WHEN 'High' THEN 2 " +
+      "WHEN 'Medium' THEN 3 " +
+      "ELSE 4 END, health_score ASC";
 
     const [rows] = await bigquery.query({
       query,
@@ -222,12 +195,7 @@ app.get("/api/assets", authenticate, async (req, res) => {
 app.get("/api/alerts", authenticate, async (req, res) => {
   try {
     const clientName = getAuthorizedClient(req);
-
-    let query = \`
-      SELECT *
-      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.active_alerts\\\`
-    \`;
-
+    let query = "SELECT * FROM " + table("active_alerts");
     const params = {};
 
     if (clientName) {
@@ -252,11 +220,8 @@ app.get("/api/alerts", authenticate, async (req, res) => {
 
 app.get("/api/clients", authenticate, requireSuperAdmin, async (req, res) => {
   try {
-    const query = \`
-      SELECT *
-      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.client_summary\\\`
-      ORDER BY client_name
-    \`;
+    const query =
+      "SELECT * FROM " + table("client_summary") + " ORDER BY client_name";
 
     const [rows] = await bigquery.query({
       query,
@@ -285,11 +250,7 @@ app.post("/api/copilot", authenticate, async (req, res) => {
 
     const clientName = getAuthorizedClient(req);
 
-    let summaryQuery = \`
-      SELECT *
-      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.client_summary\\\`
-    \`;
-
+    let summaryQuery = "SELECT * FROM " + table("client_summary");
     const summaryParams = {};
 
     if (clientName) {
@@ -299,21 +260,11 @@ app.post("/api/copilot", authenticate, async (req, res) => {
 
     summaryQuery += " ORDER BY downtime_risk_inr DESC";
 
-    let alertQuery = \`
-      SELECT
-        client_name,
-        plant_name,
-        asset_id,
-        equipment_type,
-        risk_level,
-        health_score,
-        failure_type,
-        recommended_action,
-        maintenance_priority,
-        estimated_downtime_hours,
-        estimated_downtime_cost_inr
-      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.active_alerts\\\`
-    \`;
+    let alertQuery =
+      "SELECT client_name, plant_name, asset_id, equipment_type, risk_level, " +
+      "health_score, failure_type, recommended_action, maintenance_priority, " +
+      "estimated_downtime_hours, estimated_downtime_cost_inr " +
+      "FROM " + table("active_alerts");
 
     const alertParams = {};
 
@@ -322,10 +273,7 @@ app.post("/api/copilot", authenticate, async (req, res) => {
       alertParams.clientName = clientName;
     }
 
-    alertQuery += \`
-      ORDER BY alert_priority_rank ASC, health_score ASC
-      LIMIT 20
-    \`;
+    alertQuery += " ORDER BY alert_priority_rank ASC, health_score ASC LIMIT 20";
 
     const [[summaryRows], [alertRows]] = await Promise.all([
       bigquery.query({
@@ -350,28 +298,28 @@ app.post("/api/copilot", authenticate, async (req, res) => {
       active_alerts: alertRows,
     };
 
-    const prompt = \`
-You are Zero Downtime Operations Copilot, an industrial operations assistant.
-
-Answer the user's question using only the authorised operational context below.
-
-Rules:
-- Never invent asset IDs, health scores, failure types, costs, downtime hours, or maintenance actions.
-- Respect the authorised tenant scope.
-- If the supplied data cannot answer the question, say so clearly.
-- Prioritise Critical, then High, then Medium risk.
-- Distinguish operational severity from financial downtime exposure.
-- Use INR for monetary values.
-- When suggesting maintenance action, use the provided recommended_action values.
-- Keep the response concise, practical, and suitable for plant operations teams.
-- For lists, highlight the most urgent items first.
-
-USER QUESTION:
-\${question}
-
-AUTHORISED OPERATIONAL CONTEXT:
-\${JSON.stringify(context, null, 2)}
-\`;
+    const prompt = [
+      "You are Zero Downtime Operations Copilot, an industrial operations assistant.",
+      "",
+      "Answer the user's question using only the authorised operational context below.",
+      "",
+      "Rules:",
+      "- Never invent asset IDs, health scores, failure types, costs, downtime hours, or maintenance actions.",
+      "- Respect the authorised tenant scope.",
+      "- If the supplied data cannot answer the question, say so clearly.",
+      "- Prioritise Critical, then High, then Medium risk.",
+      "- Distinguish operational severity from financial downtime exposure.",
+      "- Use INR for monetary values.",
+      "- When suggesting maintenance action, use the provided recommended_action values.",
+      "- Keep the response concise, practical, and suitable for plant operations teams.",
+      "- For lists, highlight the most urgent items first.",
+      "",
+      "USER QUESTION:",
+      question,
+      "",
+      "AUTHORISED OPERATIONAL CONTEXT:",
+      JSON.stringify(context, null, 2),
+    ].join("\n");
 
     const response = await genAI.models.generateContent({
       model: "gemini-2.5-flash",
@@ -412,5 +360,5 @@ app.use((error, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(\`Zero Downtime API listening on port \${PORT}\`);
+  console.log("Zero Downtime API listening on port " + PORT);
 });
