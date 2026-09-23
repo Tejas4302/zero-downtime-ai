@@ -65,7 +65,7 @@ export default function Copilot() {
         ...current,
         {
           role: "ai",
-          text: \`I couldn't complete that request: \${message}\`,
+          text: `I couldn't complete that request: ${message}`,
         },
       ]);
     } finally {
@@ -99,7 +99,7 @@ export default function Copilot() {
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={\`msg \${message.role}\`}
+                className={`msg ${message.role}`}
                 style={{ whiteSpace: "pre-wrap" }}
               >
                 {message.text}
