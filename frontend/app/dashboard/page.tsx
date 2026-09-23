@@ -91,6 +91,41 @@ export default function Dashboard() {
   const attentionCount = totals.critical + totals.high;
   const topAlerts = alerts.slice(0, 5);
 
+  const recommendedMoveTitle = attentionCount
+    ? "Resolve high-risk assets first"
+    : "Operations are stable";
+
+  const recommendedMoveDescription = attentionCount
+    ? `${attentionCount} asset${attentionCount === 1 ? "" : "s"} currently require immediate or near-term attention. Sequence maintenance by operational urgency and financial exposure.`
+    : "No critical or high-risk assets are currently detected in the authorised scope. Focus on preventive monitoring and emerging medium-risk conditions.";
+
+  const actionPlanPrompt = attentionCount
+    ? [
+        "Build an action plan for the recommended next move: " + recommendedMoveTitle + ".",
+        recommendedMoveDescription,
+        topAlerts.length
+          ? "Prioritise these current alerts: " +
+            topAlerts
+              .map(
+                (asset) =>
+                  asset.asset_id +
+                  " (" +
+                  asset.risk_level +
+                  ", health " +
+                  asset.health_score +
+                  ", exposure " +
+                  money(asset.estimated_downtime_cost_inr) +
+                  ")"
+              )
+              .join("; ") +
+            "."
+          : "",
+        "Give me the sequence of actions, why each action matters, expected operational impact, and what should be escalated today.",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "Build a preventive operations action plan for the recommended next move: Operations are stable. Focus on preserving current health, watching emerging medium-risk conditions, and defining the next monitoring checkpoints.";
+
   const riskMix = [
     { name: "Critical", value: totals.critical },
     { name: "High", value: totals.high },
@@ -229,7 +264,7 @@ export default function Dashboard() {
                 <div className="chart-donut">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={riskMix} dataKey="value" innerRadius={58} outerRadius={82} paddingAngle={4}>
+                      <Pie data={riskMix} dataKey="value" innerRadius={46} outerRadius={67} paddingAngle={3} cx="50%" cy="50%">
                         {riskMix.map((entry, index) => (
                           <Cell key={entry.name} fill={pieColors[index]} />
                         ))}
@@ -304,14 +339,12 @@ export default function Dashboard() {
               </div>
               <div>
                 <div className="eyebrow">Recommended next move</div>
-                <h2>{attentionCount ? "Resolve high-risk assets first" : "Operations are stable"}</h2>
+                <h2>{recommendedMoveTitle}</h2>
                 <p>
-                  {attentionCount
-                    ? `${attentionCount} asset${attentionCount === 1 ? "" : "s"} currently require immediate or near-term attention. Use Copilot to sequence maintenance by operational and financial impact.`
-                    : "No critical or high-risk assets are currently detected in your authorised scope."}
+                  {recommendedMoveDescription}
                 </p>
               </div>
-              <Link href="/copilot" className="btn btn-primary decision-button">
+              <Link href={"/copilot?question=" + encodeURIComponent(actionPlanPrompt)} className="btn btn-primary decision-button">
                 <Bot size={16} />
                 Build action plan
               </Link>
