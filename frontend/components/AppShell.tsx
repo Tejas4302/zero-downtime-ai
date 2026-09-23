@@ -14,6 +14,10 @@ import {
   Settings,
   ShieldCheck,
   Users,
+  Radar,
+  BookOpenCheck,
+  FlaskConical,
+  ClipboardList,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 
@@ -24,7 +28,11 @@ const nav = [
   ["/dashboard", "Overview", LayoutDashboard],
   ["/assets", "Assets", Boxes],
   ["/alerts", "Alerts", Bell],
-  ["/copilot", "AI Copilot", Bot],
+  ["/copilot", "AI Analyst", Bot],
+  ["/intelligence", "Intelligence", Radar],
+  ["/metrics", "Metric Governance", BookOpenCheck],
+  ["/scenario", "Scenario Lab", FlaskConical],
+  ["/decisions", "Decision Board", ClipboardList],
   ["/users", "Users", Users],
   ["/settings", "Settings", Settings],
 ] as const;
