@@ -17,7 +17,7 @@ const roleLabel = (role: string) =>
 export default function Users() {
   const { me } = useAuth();
   const [users, setUsers] = useState<AppUser[]>([]);
-  const [error, setError] = useState("");
+  const [error, setError] = useState("");\n  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!me || me.role === "standard") return;
@@ -75,7 +75,7 @@ export default function Users() {
 
           {error && <div className="notice notice-error">{error}</div>}
 
-          <div className="table-wrap users-table">
+          {loading ? (\n            <div className="card state-panel"><strong>Loading user access</strong>Reading authorised Firebase accounts…</div>\n          ) : (\n          <div className="table-wrap users-table">
             <table>
               <thead>
                 <tr>
