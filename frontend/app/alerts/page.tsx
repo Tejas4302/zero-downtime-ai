@@ -18,10 +18,15 @@ const money = (value: number) =>
 
 export default function Alerts() {
   const [data, setData] = useState<Asset[]>([]);
-  const [risk, setRisk] = useState("All");\n  const [loading, setLoading] = useState(true);\n  const [error, setError] = useState("");
+  const [risk, setRisk] = useState("All");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    apiFetch<Asset[]>("/api/alerts").then(setData);
+    apiFetch<Asset[]>("/api/alerts")
+      .then(setData)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load alerts"))
+      .finally(() => setLoading(false));
   }, []);
 
   const visible = useMemo(
@@ -48,13 +53,16 @@ export default function Alerts() {
           </h1>
           <p>Prioritised maintenance conditions ranked by urgency and financial exposure.</p>
         </div>
+
         <Link href="/copilot" className="btn btn-primary">
           <Bot size={16} />
           Build action plan
         </Link>
       </div>
 
-      {error && <div className="notice notice-error page-error">{error}</div>}\n\n      <div className="alert-summary-strip">
+      {error && <div className="notice notice-error page-error">{error}</div>}
+
+      <div className="alert-summary-strip">
         <div>
           <span>Critical</span>
           <strong>{counts.Critical}</strong>
@@ -67,6 +75,7 @@ export default function Alerts() {
           <span>Medium</span>
           <strong>{counts.Medium}</strong>
         </div>
+
         <div className="alert-filter">
           <Filter size={15} />
           <select value={risk} onChange={(event) => setRisk(event.target.value)}>
@@ -79,10 +88,15 @@ export default function Alerts() {
         </div>
       </div>
 
-      {loading ? (\n        <div className="card state-panel"><strong>Loading maintenance queue</strong>Fetching current operational alerts…</div>\n      ) : visible.length ? (
+      {loading ? (
+        <div className="card state-panel">
+          <strong>Loading maintenance queue</strong>
+          Fetching current operational alerts…
+        </div>
+      ) : visible.length ? (
         <div className="alert-stack">
           {visible.map((asset) => (
-            <div className="card alert-row-card" key={`${asset.client_name}-${asset.asset_id}`}>
+            <div className="card alert-row-card" key={asset.client_name + "-" + asset.asset_id}>
               <div className="alert-row-main">
                 <div className="alert-icon">
                   <ShieldAlert size={18} />
@@ -92,9 +106,7 @@ export default function Alerts() {
                     <strong>{asset.asset_id}</strong>
                     <RiskBadge risk={asset.risk_level} />
                   </div>
-                  <span>
-                    {asset.equipment_type} · {asset.plant_name}
-                  </span>
+                  <span>{asset.equipment_type} · {asset.plant_name}</span>
                 </div>
               </div>
 
@@ -120,10 +132,11 @@ export default function Alerts() {
 
               <Link
                 className="icon-button"
-                href={`/copilot?question=${encodeURIComponent(
-                  `What should we do about asset ${asset.asset_id} and why?`
-                )}`}
-                aria-label={`Ask Copilot about ${asset.asset_id}`}
+                href={
+                  "/copilot?question=" +
+                  encodeURIComponent("What should we do about asset " + asset.asset_id + " and why?")
+                }
+                aria-label={"Ask Copilot about " + asset.asset_id}
               >
                 <ArrowUpRight size={17} />
               </Link>
@@ -136,8 +149,9 @@ export default function Alerts() {
           ))}
         </div>
       ) : (
-        <div className="card empty">
-          No alerts match the selected filter.
+        <div className="card state-panel">
+          <strong>No active alerts in this view</strong>
+          Adjust the risk filter or continue monitoring the fleet.
         </div>
       )}
     </Protected>
