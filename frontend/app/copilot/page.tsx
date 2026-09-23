@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Database, RotateCcw, Send, Sparkles } from "lucide-react";
 
 import Protected from "@/components/Protected";
