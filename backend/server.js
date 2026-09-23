@@ -327,8 +327,8 @@ function cleanCopilotAnswer(value) {
     .replace(/\*\*/g, "")
     .replace(/__/g, "")
     .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^s*\*\s+/gm, "- ")
-    .replace(/^s*•\s+/gm, "- ")
+    .replace(/^\s*\*\s+/gm, "- ")
+    .replace(/^\s*•\s+/gm, "- ")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/```/g, "")
     .replace(/\n{3,}/g, "\n\n")
@@ -431,7 +431,7 @@ app.post("/api/copilot", authenticate, async (req, res) => {
       "- Distinguish operational severity from financial downtime exposure.",
       "- Use INR for monetary values.",
       "- When suggesting maintenance action, use the provided recommended_action values.",
-      "- Keep the response concise, practical, and suitable for plant operations teams.",
+      "- Keep the response concise, practical, and suitable for plant operations teams.",\n      "- Start with one short natural-language insight before structured details. Avoid sounding abrupt or robotic.",\n      "- Explain why the finding matters operationally when the data supports it.",\n      "- Prefer a calm decision-support tone: insight, evidence, then recommended action.",
       "- Return clean plain text only. Do not use Markdown syntax, asterisks, hashes, backticks, tables, or code fences.",
       "- Use short section headings on their own line, followed by hyphen bullets where useful.",
       "- For asset lists, keep each asset compact: Asset ID, plant, equipment, health, recommended action, and exposure.",
