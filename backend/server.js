@@ -3,38 +3,84 @@ const cors = require("cors");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { BigQuery } = require("@google-cloud/bigquery");
+const { GoogleGenAI } = require("@google/genai");
 
-initializeApp({ projectId: "zero-downtime-ai-509413" });
+const PROJECT_ID = "zero-downtime-ai-509413";
+const DATASET_ID = "zero_downtime";
+const BIGQUERY_REGION = "asia-south1";
+const VERTEX_LOCATION = "global";
+
+initializeApp({ projectId: PROJECT_ID });
 
 const auth = getAuth();
-const bigquery = new BigQuery({ projectId: "zero-downtime-ai-509413" });
+const bigquery = new BigQuery({ projectId: PROJECT_ID });
+const genAI = new GoogleGenAI({
+  vertexai: true,
+  project: PROJECT_ID,
+  location: VERTEX_LOCATION,
+});
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-app.use(cors());
-app.use(express.json());
+const ALLOWED_ORIGINS = [
+  "https://zero-downtime-web-1052752541109.asia-south1.run.app",
+];
 
 const CLIENT_MAP = {
   automotion: "AutoMotion Motors",
   packpro: "PackPro Industries",
   flowcore: "FlowCore Manufacturing",
-  freshline: "FreshLine Foods"
+  freshline: "FreshLine Foods",
 };
+
+const ALLOWED_ROLES = new Set(["super_admin", "client_admin", "standard"]);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      return callback(new Error("Origin not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+app.use(express.json({ limit: "32kb" }));
 
 async function authenticate(req, res, next) {
   try {
     const header = req.headers.authorization || "";
+
     if (!header.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Missing authorization token" });
     }
 
     const decodedToken = await auth.verifyIdToken(header.substring(7));
+    const role = decodedToken.role;
+    const clientId = decodedToken.client_id;
+
+    if (!role || !ALLOWED_ROLES.has(role)) {
+      return res.status(403).json({ error: "Invalid user role" });
+    }
+
+    if (role === "super_admin" && clientId !== "GLOBAL") {
+      return res.status(403).json({ error: "Invalid super admin scope" });
+    }
+
+    if (role !== "super_admin" && !CLIENT_MAP[clientId]) {
+      return res.status(403).json({ error: "Invalid client scope" });
+    }
+
     req.user = {
       uid: decodedToken.uid,
-      email: decodedToken.email,
-      role: decodedToken.role,
-      client_id: decodedToken.client_id
+      email: decodedToken.email || null,
+      role,
+      client_id: clientId,
     };
+
     next();
   } catch (error) {
     console.error("Authentication error:", error);
@@ -43,12 +89,40 @@ async function authenticate(req, res, next) {
 }
 
 function getAuthorizedClient(req) {
-  if (req.user.role === "super_admin") return null;
-  return CLIENT_MAP[req.user.client_id];
+  const { role, client_id } = req.user;
+
+  if (role === "super_admin" && client_id === "GLOBAL") {
+    return null;
+  }
+
+  if (!["client_admin", "standard"].includes(role)) {
+    throw new Error("Unauthorized role");
+  }
+
+  const clientName = CLIENT_MAP[client_id];
+
+  if (!clientName) {
+    throw new Error("Invalid client scope");
+  }
+
+  return clientName;
+}
+
+function requireSuperAdmin(req, res, next) {
+  if (req.user.role !== "super_admin" || req.user.client_id !== "GLOBAL") {
+    return res.status(403).json({ error: "Super admin access required" });
+  }
+
+  next();
 }
 
 app.get("/", (req, res) => {
-  res.json({ service: "Zero Downtime API", status: "running" });
+  res.json({
+    service: "Zero Downtime API",
+    status: "running",
+    region: BIGQUERY_REGION,
+    copilot: "enabled",
+  });
 });
 
 app.get("/api/me", authenticate, (req, res) => {
@@ -58,24 +132,30 @@ app.get("/api/me", authenticate, (req, res) => {
 app.get("/api/summary", authenticate, async (req, res) => {
   try {
     const clientName = getAuthorizedClient(req);
-    let query = `
-      SELECT *
-      FROM \`zero-downtime-ai-509413.zero_downtime.client_summary\`
-    `;
 
-    const options = { query, location: "asia-south1", params: {} };
+    let query = \`
+      SELECT *
+      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.client_summary\\\`
+    \`;
+
+    const params = {};
 
     if (clientName) {
-      options.query += " WHERE client_name = @clientName";
-      options.params.clientName = clientName;
+      query += " WHERE client_name = @clientName";
+      params.clientName = clientName;
     }
 
-    options.query += " ORDER BY downtime_risk_inr DESC";
+    query += " ORDER BY downtime_risk_inr DESC";
 
-    const [rows] = await bigquery.query(options);
+    const [rows] = await bigquery.query({
+      query,
+      location: BIGQUERY_REGION,
+      params,
+    });
+
     res.json(rows);
   } catch (error) {
-    console.error(error);
+    console.error("Summary error:", error);
     res.status(500).json({ error: "Failed to load client summary" });
   }
 });
@@ -83,7 +163,8 @@ app.get("/api/summary", authenticate, async (req, res) => {
 app.get("/api/assets", authenticate, async (req, res) => {
   try {
     const clientName = getAuthorizedClient(req);
-    let query = `
+
+    let query = \`
       SELECT
         client_name,
         plant_name,
@@ -104,17 +185,17 @@ app.get("/api/assets", authenticate, async (req, res) => {
         maintenance_priority,
         estimated_downtime_hours,
         estimated_downtime_cost_inr
-      FROM \`zero-downtime-ai-509413.zero_downtime.current_asset_health\`
-    `;
+      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.current_asset_health\\\`
+    \`;
 
-    const options = { query, location: "asia-south1", params: {} };
+    const params = {};
 
     if (clientName) {
-      options.query += " WHERE client_name = @clientName";
-      options.params.clientName = clientName;
+      query += " WHERE client_name = @clientName";
+      params.clientName = clientName;
     }
 
-    options.query += `
+    query += \`
       ORDER BY
         CASE risk_level
           WHEN 'Critical' THEN 1
@@ -123,12 +204,17 @@ app.get("/api/assets", authenticate, async (req, res) => {
           ELSE 4
         END,
         health_score ASC
-    `;
+    \`;
 
-    const [rows] = await bigquery.query(options);
+    const [rows] = await bigquery.query({
+      query,
+      location: BIGQUERY_REGION,
+      params,
+    });
+
     res.json(rows);
   } catch (error) {
-    console.error(error);
+    console.error("Assets error:", error);
     res.status(500).json({ error: "Failed to load asset data" });
   }
 });
@@ -136,48 +222,195 @@ app.get("/api/assets", authenticate, async (req, res) => {
 app.get("/api/alerts", authenticate, async (req, res) => {
   try {
     const clientName = getAuthorizedClient(req);
-    let query = `
-      SELECT *
-      FROM \`zero-downtime-ai-509413.zero_downtime.active_alerts\`
-    `;
 
-    const options = { query, location: "asia-south1", params: {} };
+    let query = \`
+      SELECT *
+      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.active_alerts\\\`
+    \`;
+
+    const params = {};
 
     if (clientName) {
-      options.query += " WHERE client_name = @clientName";
-      options.params.clientName = clientName;
+      query += " WHERE client_name = @clientName";
+      params.clientName = clientName;
     }
 
-    options.query += " ORDER BY alert_priority_rank ASC, health_score ASC";
+    query += " ORDER BY alert_priority_rank ASC, health_score ASC";
 
-    const [rows] = await bigquery.query(options);
+    const [rows] = await bigquery.query({
+      query,
+      location: BIGQUERY_REGION,
+      params,
+    });
+
     res.json(rows);
   } catch (error) {
-    console.error(error);
+    console.error("Alerts error:", error);
     res.status(500).json({ error: "Failed to load alerts" });
   }
 });
 
-app.get("/api/clients", authenticate, async (req, res) => {
+app.get("/api/clients", authenticate, requireSuperAdmin, async (req, res) => {
   try {
-    if (req.user.role !== "super_admin") {
-      return res.status(403).json({ error: "Super admin access required" });
-    }
-
-    const query = `
+    const query = \`
       SELECT *
-      FROM \`zero-downtime-ai-509413.zero_downtime.client_summary\`
+      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.client_summary\\\`
       ORDER BY client_name
-    `;
+    \`;
 
-    const [rows] = await bigquery.query({ query, location: "asia-south1" });
+    const [rows] = await bigquery.query({
+      query,
+      location: BIGQUERY_REGION,
+    });
+
     res.json(rows);
   } catch (error) {
-    console.error(error);
+    console.error("Clients error:", error);
     res.status(500).json({ error: "Failed to load clients" });
   }
 });
 
+app.post("/api/copilot", authenticate, async (req, res) => {
+  try {
+    const question =
+      typeof req.body?.question === "string" ? req.body.question.trim() : "";
+
+    if (!question) {
+      return res.status(400).json({ error: "Question is required" });
+    }
+
+    if (question.length > 1000) {
+      return res.status(400).json({ error: "Question is too long" });
+    }
+
+    const clientName = getAuthorizedClient(req);
+
+    let summaryQuery = \`
+      SELECT *
+      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.client_summary\\\`
+    \`;
+
+    const summaryParams = {};
+
+    if (clientName) {
+      summaryQuery += " WHERE client_name = @clientName";
+      summaryParams.clientName = clientName;
+    }
+
+    summaryQuery += " ORDER BY downtime_risk_inr DESC";
+
+    let alertQuery = \`
+      SELECT
+        client_name,
+        plant_name,
+        asset_id,
+        equipment_type,
+        risk_level,
+        health_score,
+        failure_type,
+        recommended_action,
+        maintenance_priority,
+        estimated_downtime_hours,
+        estimated_downtime_cost_inr
+      FROM \\\`\${PROJECT_ID}.\${DATASET_ID}.active_alerts\\\`
+    \`;
+
+    const alertParams = {};
+
+    if (clientName) {
+      alertQuery += " WHERE client_name = @clientName";
+      alertParams.clientName = clientName;
+    }
+
+    alertQuery += \`
+      ORDER BY alert_priority_rank ASC, health_score ASC
+      LIMIT 20
+    \`;
+
+    const [[summaryRows], [alertRows]] = await Promise.all([
+      bigquery.query({
+        query: summaryQuery,
+        location: BIGQUERY_REGION,
+        params: summaryParams,
+      }),
+      bigquery.query({
+        query: alertQuery,
+        location: BIGQUERY_REGION,
+        params: alertParams,
+      }),
+    ]);
+
+    const context = {
+      scope: {
+        role: req.user.role,
+        client_id: req.user.client_id,
+        client_name: clientName || "All clients",
+      },
+      portfolio_summary: summaryRows,
+      active_alerts: alertRows,
+    };
+
+    const prompt = \`
+You are Zero Downtime Operations Copilot, an industrial operations assistant.
+
+Answer the user's question using only the authorised operational context below.
+
+Rules:
+- Never invent asset IDs, health scores, failure types, costs, downtime hours, or maintenance actions.
+- Respect the authorised tenant scope.
+- If the supplied data cannot answer the question, say so clearly.
+- Prioritise Critical, then High, then Medium risk.
+- Distinguish operational severity from financial downtime exposure.
+- Use INR for monetary values.
+- When suggesting maintenance action, use the provided recommended_action values.
+- Keep the response concise, practical, and suitable for plant operations teams.
+- For lists, highlight the most urgent items first.
+
+USER QUESTION:
+\${question}
+
+AUTHORISED OPERATIONAL CONTEXT:
+\${JSON.stringify(context, null, 2)}
+\`;
+
+    const response = await genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        temperature: 0.2,
+        maxOutputTokens: 900,
+      },
+    });
+
+    const answer =
+      typeof response.text === "string"
+        ? response.text
+        : "I could not generate a response from the available operational context.";
+
+    res.json({
+      answer,
+      scope: clientName || "All clients",
+    });
+  } catch (error) {
+    console.error("Copilot error:", error);
+    res.status(500).json({ error: "Failed to generate copilot response" });
+  }
+});
+
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+app.use((error, req, res, next) => {
+  console.error("Unhandled error:", error);
+
+  if (error.message === "Origin not allowed by CORS") {
+    return res.status(403).json({ error: "Origin not allowed" });
+  }
+
+  res.status(500).json({ error: "Internal server error" });
+});
+
 app.listen(PORT, () => {
-  console.log(`Zero Downtime API listening on port ${PORT}`);
+  console.log(\`Zero Downtime API listening on port \${PORT}\`);
 });
