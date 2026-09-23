@@ -1,0 +1,45 @@
+name: Validate Zero Downtime
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm install
+      - run: npm run check
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_PUBLIC_API_URL: https://zero-downtime-api-1052752541109.asia-south1.run.app
+      NEXT_PUBLIC_FIREBASE_API_KEY: test-key
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: zero-downtime-ai-509413.firebaseapp.com
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: zero-downtime-ai-509413
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: zero-downtime-ai-509413.firebasestorage.app
+      NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "1052752541109"
+      NEXT_PUBLIC_FIREBASE_APP_ID: test-app-id
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm install
+      - run: npm run build
