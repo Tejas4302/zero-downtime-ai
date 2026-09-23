@@ -38,7 +38,15 @@ npm run build
 echo "==> Deploying frontend"
 gcloud run deploy "$FRONTEND_SERVICE"   --source .   --region "$REGION"   --allow-unauthenticated
 
+BACKEND_URL="$(gcloud run services describe "$BACKEND_SERVICE" --region "$REGION" --format='value(status.url)')"
+FRONTEND_URL="$(gcloud run services describe "$FRONTEND_SERVICE" --region "$REGION" --format='value(status.url)')"
+
+echo "==> Running smoke checks"
+curl -fsS "$BACKEND_URL" >/dev/null
+curl -fsSI "$FRONTEND_URL" >/dev/null
+
 echo
 echo "Deployment complete."
-echo "Frontend: https://zero-downtime-web-1052752541109.asia-south1.run.app"
-echo "Backend:  https://zero-downtime-api-1052752541109.asia-south1.run.app"
+echo "Frontend: $FRONTEND_URL"
+echo "Backend:  $BACKEND_URL"
+echo "Smoke checks: passed"
