@@ -808,3 +808,55 @@ body{overflow-x:hidden}
   .signal-card{grid-template-columns:32px 1fr}
   .signal-score{grid-column:2;text-align:left;display:flex;gap:7px;align-items:center}
 }
+
+
+/* --- Dashboard risk mix tightening ------------------------------------- */
+.risk-mix-layout{
+  grid-template-columns:180px minmax(130px,1fr);
+  gap:14px;
+  align-items:center;
+}
+.chart-donut{
+  width:180px;
+  height:180px;
+  margin:0 auto;
+}
+.risk-legend{
+  gap:10px;
+}
+.legend-row{
+  grid-template-columns:10px 1fr auto;
+  gap:8px;
+  font-size:11px;
+}
+.legend-dot{
+  width:8px;
+  height:8px;
+}
+.create-project-empty{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:9px;
+  border:1px dashed rgba(90,167,255,.18);
+  border-radius:9px;
+  background:rgba(90,167,255,.035);
+  color:#8ebfe8;
+  font-size:10px;
+  text-align:left;
+}
+.create-project-empty:hover{
+  background:rgba(90,167,255,.07);
+  color:#d9efff;
+}
+
+@media (max-width:1200px){
+  .risk-mix-layout{
+    grid-template-columns:160px minmax(120px,1fr);
+  }
+  .chart-donut{
+    width:160px;
+    height:160px;
+  }
+}
