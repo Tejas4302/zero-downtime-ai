@@ -322,6 +322,19 @@ app.get("/api/assets/:assetId/history", authenticate, async (req, res) => {
   }
 });
 
+function cleanCopilotAnswer(value) {
+  return String(value || "")
+    .replace(/\*\*/g, "")
+    .replace(/__/g, "")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^s*\*\s+/gm, "- ")
+    .replace(/^s*•\s+/gm, "- ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/```/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 app.post("/api/copilot", authenticate, async (req, res) => {
   try {
     const question =
@@ -334,6 +347,20 @@ app.post("/api/copilot", authenticate, async (req, res) => {
     if (question.length > 1000) {
       return res.status(400).json({ error: "Question is too long" });
     }
+
+    const rawHistory = Array.isArray(req.body?.history) ? req.body.history : [];
+    const history = rawHistory
+      .slice(-8)
+      .filter(
+        (item) =>
+          item &&
+          (item.role === "user" || item.role === "ai") &&
+          typeof item.text === "string"
+      )
+      .map((item) => ({
+        role: item.role,
+        text: item.text.slice(0, 1500),
+      }));
 
     const clientName = getAuthorizedClient(req);
 
@@ -360,7 +387,7 @@ app.post("/api/copilot", authenticate, async (req, res) => {
       alertParams.clientName = clientName;
     }
 
-    alertQuery += " ORDER BY alert_priority_rank ASC, health_score ASC LIMIT 20";
+    alertQuery += " ORDER BY alert_priority_rank ASC, health_score ASC LIMIT 25";
 
     const [[summaryRows], [alertRows]] = await Promise.all([
       bigquery.query({
@@ -385,6 +412,12 @@ app.post("/api/copilot", authenticate, async (req, res) => {
       active_alerts: alertRows,
     };
 
+    const conversationContext = history.length
+      ? history
+          .map((item) => (item.role === "user" ? "User: " : "Assistant: ") + item.text)
+          .join("\n")
+      : "No prior conversation context.";
+
     const prompt = [
       "You are Zero Downtime Operations Copilot, an industrial operations assistant.",
       "",
@@ -402,7 +435,10 @@ app.post("/api/copilot", authenticate, async (req, res) => {
       "- Return clean plain text only. Do not use Markdown syntax, asterisks, hashes, backticks, tables, or code fences.",
       "- Use short section headings on their own line, followed by hyphen bullets where useful.",
       "- For asset lists, keep each asset compact: Asset ID, plant, equipment, health, recommended action, and exposure.",
-      "- For lists, highlight the most urgent items first.",
+      "- For follow-up questions, use the supplied conversation context only to understand the user's intent. Operational facts must still come from the authorised data.",
+      "",
+      "RECENT CONVERSATION:",
+      conversationContext,
       "",
       "USER QUESTION:",
       question,
@@ -415,18 +451,18 @@ app.post("/api/copilot", authenticate, async (req, res) => {
       model: "gemini-2.5-flash",
       contents: prompt,
       config: {
-        temperature: 0.2,
+        temperature: 0.15,
         maxOutputTokens: 900,
       },
     });
 
-    const answer =
+    const rawAnswer =
       typeof response.text === "string"
         ? response.text
         : "I could not generate a response from the available operational context.";
 
     res.json({
-      answer,
+      answer: cleanCopilotAnswer(rawAnswer),
       scope: clientName || "All clients",
     });
   } catch (error) {
